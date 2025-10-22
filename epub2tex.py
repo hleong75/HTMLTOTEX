@@ -85,6 +85,18 @@ class EPUBToLaTeXConverter:
             'sup': ('$^{\\text{', '}}$'),
             'del': ('\\sout{', '}'),
             'strike': ('\\sout{', '}'),
+            's': ('\\sout{', '}'),
+            'ins': ('\\underline{', '}'),
+            'mark': ('\\sethlcolor{highlightyellow}\\hl{', '}'),
+            'kbd': ('\\texttt{', '}'),
+            'samp': ('\\texttt{', '}'),
+            'var': ('\\textit{', '}'),
+            'abbr': ('\\textsc{', '}'),
+            'cite': ('\\textit{', '}'),
+            'q': ('``', "''"),
+            'dfn': ('\\emph{', '}'),
+            'time': ('', ''),
+            'data': ('', ''),
         }
     
     def _default_output_path(self) -> str:
@@ -170,6 +182,7 @@ class EPUBToLaTeXConverter:
     def _convert_list(self, tag: Tag) -> str:
         """
         Convert HTML list (ul/ol) to LaTeX itemize/enumerate.
+        Supports nested lists.
         
         Args:
             tag: BeautifulSoup tag object
@@ -181,9 +194,27 @@ class EPUBToLaTeXConverter:
         result = f"\\begin{{{list_type}}}\n"
         
         for item in tag.find_all('li', recursive=False):
-            # Process only the children of each list item
-            content = ''.join(self._convert_element(child, inline=True) for child in item.children)
-            result += f"    \\item {content}\n"
+            # Check if this item contains a nested list
+            nested_lists = item.find_all(['ul', 'ol'], recursive=False)
+            
+            # Get item content excluding nested lists
+            item_content = ""
+            for child in item.children:
+                if isinstance(child, Tag) and child.name in ['ul', 'ol']:
+                    # Skip nested lists in main content - we'll add them after
+                    continue
+                else:
+                    item_content += self._convert_element(child, inline=True)
+            
+            result += f"    \\item {item_content.strip()}\n"
+            
+            # Add nested lists
+            for nested in nested_lists:
+                nested_content = self._convert_list(nested)
+                # Indent nested list
+                nested_lines = nested_content.split('\n')
+                result += '\n'.join('    ' + line for line in nested_lines if line)
+                result += '\n'
         
         result += f"\\end{{{list_type}}}\n\n"
         return result
@@ -198,7 +229,13 @@ class EPUBToLaTeXConverter:
         Returns:
             LaTeX table environment
         """
-        # Find all rows
+        # Find caption
+        caption_tag = tag.find('caption')
+        caption_text = ""
+        if caption_tag:
+            caption_text = ''.join(self._convert_element(c, inline=True) for c in caption_tag.children)
+        
+        # Find all rows (excluding caption)
         rows = tag.find_all('tr')
         if not rows:
             return ""
@@ -213,6 +250,11 @@ class EPUBToLaTeXConverter:
         # Create table
         col_format = '|' + 'l|' * cols
         result = "\\begin{table}[h]\n\\centering\n"
+        
+        # Add caption if present
+        if caption_text:
+            result += f"\\caption{{{caption_text}}}\n"
+        
         result += f"\\begin{{tabular}}{{{col_format}}}\n"
         result += "\\hline\n"
         
@@ -304,6 +346,84 @@ class EPUBToLaTeXConverter:
         content = ''.join(self._convert_element(child, inline=False) for child in tag.children)
         return f"\\begin{{quote}}\n{content}\\end{{quote}}\n\n"
     
+    def _convert_definition_list(self, tag: Tag) -> str:
+        """
+        Convert HTML definition list (dl) to LaTeX description environment.
+        
+        Args:
+            tag: BeautifulSoup tag object
+            
+        Returns:
+            LaTeX description environment
+        """
+        result = "\\begin{description}\n"
+        
+        current_term = None
+        for child in tag.children:
+            if isinstance(child, Tag):
+                if child.name == 'dt':
+                    # Definition term
+                    current_term = ''.join(self._convert_element(c, inline=True) for c in child.children).strip()
+                elif child.name == 'dd' and current_term:
+                    # Definition description
+                    content = ''.join(self._convert_element(c, inline=True) for c in child.children).strip()
+                    result += f"    \\item[{current_term}] {content}\n"
+                    current_term = None
+        
+        result += "\\end{description}\n\n"
+        return result
+    
+    def _convert_figure(self, tag: Tag) -> str:
+        """
+        Convert HTML figure to LaTeX figure environment.
+        
+        Args:
+            tag: BeautifulSoup tag object
+            
+        Returns:
+            LaTeX figure environment
+        """
+        # Find image and caption
+        img = tag.find('img')
+        figcaption = tag.find('figcaption')
+        
+        result = "\\begin{figure}[h]\n\\centering\n"
+        
+        if img:
+            src = img.get('src', '')
+            # Clean up image path
+            src = src.split('/')[-1] if '/' in src else src
+            
+            # Find image in our mapping
+            img_filename = None
+            for orig_name, mapped_name in self.images.items():
+                if src in orig_name or orig_name.endswith(src):
+                    img_filename = mapped_name
+                    break
+            
+            if img_filename:
+                result += f"\\includegraphics[max width=\\textwidth]{{images/{img_filename}}}\n"
+        
+        if figcaption:
+            caption_text = ''.join(self._convert_element(c, inline=True) for c in figcaption.children)
+            result += f"\\caption{{{caption_text}}}\n"
+        
+        result += "\\end{figure}\n\n"
+        return result
+    
+    def _convert_address(self, tag: Tag) -> str:
+        """
+        Convert HTML address to LaTeX.
+        
+        Args:
+            tag: BeautifulSoup tag object
+            
+        Returns:
+            LaTeX formatted address
+        """
+        content = ''.join(self._convert_element(child, inline=True) for child in tag.children)
+        return f"\\begin{{flushleft}}\n\\textit{{{content}}}\n\\end{{flushleft}}\n\n"
+    
     def _convert_pre_code(self, tag: Tag) -> str:
         """
         Convert HTML pre/code blocks to LaTeX verbatim.
@@ -358,7 +478,13 @@ class EPUBToLaTeXConverter:
         
         # Handle different tag types
         if tag_name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            return self._convert_heading(element)
+            # Add page break before chapters and major sections
+            prefix = ""
+            if tag_name == 'h1':
+                prefix = "\\clearpage\n"
+            elif tag_name == 'h2':
+                prefix = "\\newpage\n"
+            return prefix + self._convert_heading(element)
         
         elif tag_name == 'p':
             return self._convert_paragraph(element)
@@ -366,17 +492,26 @@ class EPUBToLaTeXConverter:
         elif tag_name in ['ul', 'ol']:
             return self._convert_list(element)
         
+        elif tag_name == 'dl':
+            return self._convert_definition_list(element)
+        
         elif tag_name == 'table':
             return self._convert_table(element)
         
         elif tag_name == 'img':
             return self._convert_image(element)
         
+        elif tag_name == 'figure':
+            return self._convert_figure(element)
+        
         elif tag_name == 'a':
             return self._convert_link(element)
         
         elif tag_name == 'blockquote':
             return self._convert_blockquote(element)
+        
+        elif tag_name == 'address':
+            return self._convert_address(element)
         
         elif tag_name in ['pre', 'code'] and tag_name == 'pre':
             return self._convert_pre_code(element)
@@ -385,10 +520,48 @@ class EPUBToLaTeXConverter:
             return "\\\\\n" if inline else "\n"
         
         elif tag_name == 'hr':
-            return "\\noindent\\rule{\\textwidth}{0.4pt}\n\n"
+            return "\\vspace{0.5cm}\n\\noindent\\rule{\\textwidth}{0.4pt}\n\\vspace{0.5cm}\n\n"
         
-        elif tag_name in ['div', 'span', 'section', 'article']:
+        elif tag_name == 'wbr':
+            return "\\-"  # Soft hyphen for word break opportunity
+        
+        # Semantic HTML5 tags - process as containers with optional formatting
+        elif tag_name in ['div', 'span', 'section', 'article', 'main']:
             return self._convert_div_span(element, inline=inline)
+        
+        elif tag_name in ['header', 'footer']:
+            # Add some vertical space for headers/footers
+            content = self._convert_div_span(element, inline=inline)
+            if content.strip():
+                return f"\\vspace{{0.3cm}}\n{content}\\vspace{{0.3cm}}\n"
+            return content
+        
+        elif tag_name == 'aside':
+            # Render asides in a shaded box
+            content = ''.join(self._convert_element(child, inline=False) for child in element.children)
+            if content.strip():
+                return f"\\begin{{quotation}}\n{content}\\end{{quotation}}\n\n"
+            return ""
+        
+        elif tag_name == 'nav':
+            # Skip navigation elements as they're not relevant for printed documents
+            return ""
+        
+        # Caption tag (for tables)
+        elif tag_name == 'caption':
+            content = ''.join(self._convert_element(child, inline=True) for child in element.children)
+            return f"\\caption{{{content}}}\n"
+        
+        # Meter, progress, output - just extract text content
+        elif tag_name in ['meter', 'progress', 'output']:
+            return ''.join(self._convert_element(child, inline=True) for child in element.children)
+        
+        # Audio, video, canvas - add placeholder text
+        elif tag_name in ['audio', 'video', 'canvas']:
+            alt_text = element.get('alt', '') or element.get_text()
+            if alt_text:
+                return f"[{tag_name.upper()}: {self._escape_latex(alt_text)}]\n\n"
+            return f"[{tag_name.upper()} content]\n\n"
         
         # Handle inline formatting
         elif tag_name in self.format_mapping:
@@ -486,8 +659,12 @@ class EPUBToLaTeXConverter:
 % Page layout
 \usepackage[margin=2.5cm]{geometry}
 
-% Colors and hyperlinks
+% Colors and highlighting
 \usepackage{xcolor}
+\usepackage{soul}
+\definecolor{highlightyellow}{RGB}{255,255,200}
+
+% Hyperlinks
 \usepackage{hyperref}
 \hypersetup{
     colorlinks=true,
@@ -501,6 +678,8 @@ class EPUBToLaTeXConverter:
 % Tables
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
 
 % Lists
 \usepackage{enumitem}
@@ -510,8 +689,18 @@ class EPUBToLaTeXConverter:
 \usepackage{setspace}
 \setstretch{1.2}
 
-% Strikethrough
+% Strikethrough and underline
 \usepackage[normalem]{ulem}
+
+% Better verbatim
+\usepackage{fancyvrb}
+
+% Better section spacing
+\usepackage{titlesec}
+
+% Page breaks and spacing
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{1.5em}
 
 % Title information
 \title{""" + metadata['title'] + r"""}
@@ -551,33 +740,78 @@ class EPUBToLaTeXConverter:
         """
         try:
             print(f"Reading EPUB file: {self.epub_path}")
-            self.book = epub.read_epub(self.epub_path)
+            
+            # Validate EPUB file exists
+            if not os.path.exists(self.epub_path):
+                print(f"✗ Error: EPUB file not found: {self.epub_path}")
+                return False
+            
+            # Try to read EPUB with error handling
+            try:
+                self.book = epub.read_epub(self.epub_path)
+            except Exception as e:
+                print(f"✗ Error: Failed to read EPUB file: {str(e)}")
+                print("  The file may be corrupted or not a valid EPUB format.")
+                return False
             
             print("Extracting images...")
-            self._extract_images()
+            try:
+                self._extract_images()
+            except Exception as e:
+                print(f"⚠ Warning: Error extracting images: {str(e)}")
+                print("  Continuing without images...")
             
             print("Extracting metadata...")
-            metadata = self._get_metadata()
+            try:
+                metadata = self._get_metadata()
+            except Exception as e:
+                print(f"⚠ Warning: Error extracting metadata: {str(e)}")
+                print("  Using default metadata...")
+                metadata = {
+                    'title': 'Untitled',
+                    'author': 'Unknown',
+                    'date': '',
+                }
             
             print("Converting content to LaTeX...")
             latex_content = self._generate_preamble(metadata)
             
-            # Process all document items
+            # Process all document items with error handling
+            items_processed = 0
+            items_failed = 0
+            
             for item in self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
-                html_content = item.get_content().decode('utf-8', errors='ignore')
-                
-                # Convert HTML to LaTeX
-                latex_text = self._convert_html_to_latex(html_content)
-                latex_content += latex_text
+                try:
+                    html_content = item.get_content().decode('utf-8', errors='ignore')
+                    
+                    # Convert HTML to LaTeX
+                    latex_text = self._convert_html_to_latex(html_content)
+                    latex_content += latex_text
+                    items_processed += 1
+                except Exception as e:
+                    items_failed += 1
+                    print(f"⚠ Warning: Failed to process item {item.get_name()}: {str(e)}")
+                    print("  Skipping this item and continuing...")
+                    continue
             
             latex_content += self._generate_epilogue()
             
             print(f"Writing LaTeX file: {self.output_path}")
-            with open(self.output_path, 'w', encoding='utf-8') as f:
-                f.write(latex_content)
+            try:
+                # Ensure output directory exists
+                os.makedirs(os.path.dirname(os.path.abspath(self.output_path)), exist_ok=True)
+                
+                with open(self.output_path, 'w', encoding='utf-8') as f:
+                    f.write(latex_content)
+            except Exception as e:
+                print(f"✗ Error: Failed to write output file: {str(e)}")
+                return False
             
             print(f"\n✓ Conversion successful!")
             print(f"  Output: {self.output_path}")
+            print(f"  Items processed: {items_processed}")
+            if items_failed > 0:
+                print(f"  Items failed: {items_failed}")
             if self.images:
                 print(f"  Images: {len(self.images)} images extracted to {self.images_dir}")
             
