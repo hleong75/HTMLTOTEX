@@ -251,9 +251,15 @@ Si vous rencontrez un problème, veuillez ouvrir une issue sur GitHub avec :
 ### Problèmes connus et résolus
 
 **✓ Résolu :** Erreur "Paragraph ended before \ttl@straight@i was complete"
-- **Symptôme :** Erreur de compilation LaTeX lors de la présence de balises `<br>` dans les titres
-- **Solution :** Les balises `<br>` dans les titres sont maintenant converties en espaces
-- **Version :** Corrigé dans la version 2.1
+- **Symptôme v2.2 :** Erreur de compilation LaTeX lors de l'utilisation de `<h5>` et `<h6>` dans les EPUBs
+- **Cause v2.2 :** Les commandes `\paragraph` et `\subparagraph` nécessitent un formatage spécial (pas de ligne vide après)
+- **Solution v2.2 :** Les commandes `\paragraph` et `\subparagraph` sont maintenant générées avec un retour à la ligne simple
+- **Version v2.2 :** Corrigé dans la version 2.2
+
+- **Symptôme v2.1 :** Erreur de compilation LaTeX lors de la présence de balises `<br>` dans les titres
+- **Cause v2.1 :** Les commandes de section LaTeX ne peuvent pas contenir de sauts de ligne (`\\`)
+- **Solution v2.1 :** Les balises `<br>` dans les titres sont maintenant converties en espaces
+- **Version v2.1 :** Corrigé dans la version 2.1
 
 ## 💡 Améliorations futures
 
