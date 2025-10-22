@@ -1,10 +1,68 @@
 # CHANGELOG - EPUB to LaTeX Converter Enhancements
 
+## Version 2.2 - Bug Fixes
+
+### Bug Fixes
+
+#### Fixed: Additional "Paragraph ended before \ttl@straight@i was complete" Error
+
+**Issue:**
+When EPUB files contained `<h5>` or `<h6>` tags, the converter would generate LaTeX `\paragraph` and `\subparagraph` commands with blank lines (double newlines) after them, causing a LaTeX compilation error with the `titlesec` package:
+```
+! Paragraph ended before \ttl@straight@i was complete.
+```
+
+**Root Cause:**
+- `\paragraph` and `\subparagraph` are "run-in" heading commands in LaTeX
+- When using the `titlesec` package, these commands must be immediately followed by text content
+- A blank line (double newline) after these commands causes the `titlesec` package to fail
+- The converter was using the same double newline formatting for all heading levels
+
+**Solution:**
+- Modified `_convert_heading()` to use single newline for `\paragraph` and `\subparagraph` commands
+- Other heading commands (`\chapter`, `\section`, etc.) continue to use double newlines as before
+- This ensures proper LaTeX syntax for run-in headings
+
+**Examples:**
+
+Before (caused LaTeX error):
+```html
+<h5>Paragraph Heading</h5>
+<p>Content</p>
+```
+Generated (incorrect):
+```latex
+\paragraph{Paragraph Heading}
+
+Content
+```
+
+After (works correctly):
+```html
+<h5>Paragraph Heading</h5>
+<p>Content</p>
+```
+Generated (correct):
+```latex
+\paragraph{Paragraph Heading}
+Content
+```
+
+**Testing:**
+- Added comprehensive test suite in `test_paragraph_fix.py`
+- Tests verify single newline after `\paragraph` and `\subparagraph` commands
+- Tests verify double newlines preserved for other heading commands
+- Tests verify h5/h6 work correctly with `<br>` tags (converted to spaces)
+- All existing tests continue to pass
+- No security vulnerabilities detected
+
+---
+
 ## Version 2.1 - Bug Fixes
 
 ### Bug Fixes
 
-#### Fixed: "Paragraph ended before \ttl@straight@i was complete" Error
+#### Fixed: "Paragraph ended before \ttl@straight@i was complete" Error (br tags)
 
 **Issue:**
 When EPUB files contained `<br>` tags within heading elements (`<h1>` through `<h6>`), the converter would generate LaTeX section commands with line breaks (`\\`), causing a LaTeX compilation error with the `titlesec` package:

@@ -161,7 +161,12 @@ class EPUBToLaTeXConverter:
         # Process only the children with special heading mode to avoid line breaks
         content = ''.join(self._convert_element(child, inline=True, in_heading=True) for child in tag.children)
         
-        return f"\\{latex_cmd}{{{content}}}\n\n"
+        # \paragraph and \subparagraph are run-in headings that should not have blank lines after them
+        # to avoid "Paragraph ended before \ttl@straight@i was complete" error with titlesec
+        if latex_cmd in ('paragraph', 'subparagraph'):
+            return f"\\{latex_cmd}{{{content}}}\n"
+        else:
+            return f"\\{latex_cmd}{{{content}}}\n\n"
     
     def _convert_paragraph(self, tag: Tag) -> str:
         """
