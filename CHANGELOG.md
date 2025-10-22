@@ -1,5 +1,57 @@
 # CHANGELOG - EPUB to LaTeX Converter Enhancements
 
+## Version 2.1 - Bug Fixes
+
+### Bug Fixes
+
+#### Fixed: "Paragraph ended before \ttl@straight@i was complete" Error
+
+**Issue:**
+When EPUB files contained `<br>` tags within heading elements (`<h1>` through `<h6>`), the converter would generate LaTeX section commands with line breaks (`\\`), causing a LaTeX compilation error with the `titlesec` package:
+```
+! Paragraph ended before \ttl@straight@i was complete.
+```
+
+**Root Cause:**
+- LaTeX section commands (`\chapter`, `\section`, etc.) cannot contain line breaks
+- The `titlesec` package is strict about section title formatting
+- `<br>` tags were being converted to `\\` even inside headings
+
+**Solution:**
+- Added an `in_heading` parameter to track when processing heading content
+- `<br>` tags in headings are now converted to spaces instead of line breaks
+- `<br>` tags continue to work correctly as line breaks outside of headings
+- All inline formatting (bold, italic, etc.) still works in headings
+
+**Examples:**
+
+Before (caused LaTeX error):
+```html
+<h1>Chapter Title<br/>With Line Break</h1>
+```
+Generated (incorrect):
+```latex
+\chapter{Chapter Title\\
+With Line Break}
+```
+
+After (works correctly):
+```html
+<h1>Chapter Title<br/>With Line Break</h1>
+```
+Generated (correct):
+```latex
+\chapter{Chapter Title With Line Break}
+```
+
+**Testing:**
+- Added comprehensive test suite in `test_heading_br_fix.py`
+- Tests cover all heading levels (`<h1>` through `<h6>`)
+- Tests verify `<br>` still works correctly outside headings
+- All existing tests continue to pass
+
+---
+
 ## Version 2.0 - Comprehensive HTML Tag Support
 
 ### Major Features Added
