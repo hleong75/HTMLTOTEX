@@ -5,11 +5,18 @@ Un convertisseur **ultra-puissant et robuste** pour transformer vos fichiers EPU
 ## ✨ Caractéristiques
 
 - **Conversion complète** : Transforme tous les éléments EPUB (chapitres, sections, paragraphes)
-- **Préservation du style** : Maintient le formatage (gras, italique, souligné, etc.)
+- **Support étendu des balises HTML** : Plus de 40 balises HTML différentes supportées
+- **Préservation du style** : Maintient le formatage (gras, italique, souligné, surligné, etc.)
 - **Support des médias** : Gère les images, tableaux, listes, liens
+- **Listes imbriquées** : Support complet des listes à plusieurs niveaux
+- **Listes de définitions** : Conversion des listes de définitions HTML
+- **HTML5 sémantique** : Support des balises sémantiques modernes (header, footer, aside, etc.)
+- **Tableaux avec légendes** : Support des légendes de tableaux
+- **Mise en page professionnelle** : Utilisation automatique de `\newpage`, `\clearpage` pour une pagination optimale
 - **Structure intelligente** : Génère automatiquement table des matières et métadonnées
 - **LaTeX optimisé** : Produit un code LaTeX propre et lisible
 - **Robuste** : Gestion d'erreurs complète et traitement des cas limites
+- **Compatibilité EPUB** : Supporte tous les formats EPUB valides
 
 ## 📋 Prérequis
 
@@ -64,18 +71,55 @@ python epub2tex.py --help
 
 | Élément HTML | Conversion LaTeX | Description |
 |--------------|------------------|-------------|
-| `<h1>` - `<h6>` | `\chapter`, `\section`, etc. | Titres hiérarchiques |
+| **Structure de document** |||
+| `<h1>` - `<h6>` | `\chapter`, `\section`, etc. | Titres hiérarchiques avec sauts de page |
 | `<p>` | Paragraphes | Paragraphes avec espacement |
+| `<div>`, `<section>`, `<article>` | Conteneurs | Éléments de structure |
+| `<header>`, `<footer>` | Espacement vertical | En-têtes et pieds de page |
+| `<main>` | Contenu principal | Corps du document |
+| `<aside>` | `quotation` | Contenu complémentaire |
+| `<nav>` | Ignoré | Navigation (non imprimable) |
+| **Formatage de texte** |||
 | `<b>`, `<strong>` | `\textbf{}` | Texte en gras |
 | `<i>`, `<em>` | `\textit{}`, `\emph{}` | Texte en italique |
 | `<u>` | `\underline{}` | Texte souligné |
-| `<ul>`, `<ol>` | `itemize`, `enumerate` | Listes à puces/numérotées |
-| `<table>` | `tabular` | Tableaux |
+| `<mark>` | `\hl{}` | Texte surligné en jaune |
+| `<s>`, `<del>`, `<strike>` | `\sout{}` | Texte barré |
+| `<ins>` | `\underline{}` | Texte inséré |
+| `<small>` | `{\small }` | Texte en petite taille |
+| `<code>`, `<tt>`, `<kbd>`, `<samp>` | `\texttt{}` | Police monospace |
+| `<var>` | `\textit{}` | Variables |
+| `<abbr>` | `\textsc{}` | Abréviations en petites capitales |
+| `<cite>` | `\textit{}` | Citations |
+| `<q>` | Guillemets typographiques | Citations courtes |
+| `<dfn>` | `\emph{}` | Définitions |
+| **Indices et exposants** |||
+| `<sub>` | Mode mathématique | Indices |
+| `<sup>` | Mode mathématique | Exposants |
+| **Listes** |||
+| `<ul>` | `itemize` | Listes à puces (avec support des listes imbriquées) |
+| `<ol>` | `enumerate` | Listes numérotées (avec support des listes imbriquées) |
+| `<dl>`, `<dt>`, `<dd>` | `description` | Listes de définitions |
+| **Tableaux** |||
+| `<table>` | `tabular` | Tableaux avec support des légendes |
+| `<caption>` | `\caption{}` | Légendes de tableaux |
+| **Images et figures** |||
 | `<img>` | `\includegraphics` | Images avec légendes |
+| `<figure>`, `<figcaption>` | `figure` | Figures avec légendes |
+| **Liens et références** |||
 | `<a>` | `\href{}` | Liens hypertexte |
-| `<blockquote>` | `quote` | Citations |
-| `<pre>`, `<code>` | `verbatim` | Code source |
-| `<sub>`, `<sup>` | Mode mathématique | Indices et exposants |
+| **Citations et blocs** |||
+| `<blockquote>` | `quote` | Citations longues |
+| `<pre>`, `<code>` | `verbatim` | Blocs de code source |
+| `<address>` | `flushleft` (italique) | Adresses |
+| **Séparateurs** |||
+| `<br>` | `\\` | Saut de ligne |
+| `<hr>` | `\rule{}` | Ligne horizontale avec espacement |
+| `<wbr>` | `\-` | Césure suggérée |
+| **Éléments spéciaux** |||
+| `<time>`, `<data>` | Texte extrait | Données temporelles |
+| `<audio>`, `<video>`, `<canvas>` | Texte placeholder | Médias non-textuels |
+| `<meter>`, `<progress>`, `<output>` | Texte extrait | Éléments interactifs |
 
 ### Structure du document LaTeX généré
 
@@ -93,15 +137,46 @@ Le fichier LaTeX généré inclut :
 
 Le convertisseur génère un document LaTeX avec les packages suivants :
 
+**Encodage et polices :**
 - `inputenc`, `fontenc` : Support UTF-8 et encodage
-- `babel` : Support multilingue
+- `lmodern` : Polices modernes
+
+**Support linguistique :**
+- `babel` : Support multilingue (français et anglais)
+
+**Graphiques et images :**
 - `graphicx` : Inclusion d'images
-- `hyperref` : Liens hypertexte et métadonnées PDF
+- `float` : Positionnement flottant
+
+**Mise en page :**
 - `geometry` : Configuration des marges
+- `setspace` : Espacement des lignes
+- `titlesec` : Formatage des sections
+
+**Couleurs et mise en forme :**
+- `xcolor` : Support des couleurs
+- `soul` : Surlignage de texte
+- `ulem` : Texte barré et souligné
+
+**Tableaux :**
 - `booktabs` : Tableaux professionnels
+- `tabularx` : Tableaux adaptatifs
+- `longtable` : Tableaux multi-pages
+- `array` : Amélioration des tableaux
+
+**Listes :**
+- `enumitem` : Personnalisation des listes
+
+**Hyperliens :**
+- `hyperref` : Liens hypertexte et métadonnées PDF
+
+**Typographie :**
 - `microtype` : Typographie améliorée
-- `ulem` : Texte barré
-- Et plus encore...
+
+**Code :**
+- `fancyvrb` : Environnements verbatim améliorés
+
+Et plus encore...
 
 ## 📂 Structure des fichiers de sortie
 
@@ -176,8 +251,10 @@ Si vous rencontrez un problème, veuillez ouvrir une issue sur GitHub avec :
 - Support des notes de bas de page
 - Conversion des formules mathématiques MathML
 - Options de personnalisation du style LaTeX
-- Support des EPUB3 avec contenus interactifs
+- Support des EPUB3 avec contenus interactifs avancés
 - Interface graphique (GUI)
+- Support des index et glossaires
+- Conversion des SVG en TikZ
 
 ## 🙏 Remerciements
 
