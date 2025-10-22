@@ -300,7 +300,7 @@ class EPUBToLaTeXConverter:
         
         result = "\\begin{figure}[h]\n"
         result += "\\centering\n"
-        result += f"\\includegraphics[max width=\\textwidth]{{images/{img_filename}}}\n"
+        result += f"\\includegraphics[width=\\textwidth]{{images/{img_filename}}}\n"
         if alt:
             escaped_alt = self._escape_latex(alt)
             result += f"\\caption{{{escaped_alt}}}\n"
@@ -402,7 +402,7 @@ class EPUBToLaTeXConverter:
                     break
             
             if img_filename:
-                result += f"\\includegraphics[max width=\\textwidth]{{images/{img_filename}}}\n"
+                result += f"\\includegraphics[width=\\textwidth]{{images/{img_filename}}}\n"
         
         if figcaption:
             caption_text = ''.join(self._convert_element(c, inline=True) for c in figcaption.children)
