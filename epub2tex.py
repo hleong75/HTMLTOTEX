@@ -303,7 +303,7 @@ class EPUBToLaTeXConverter:
         if not img_filename:
             return f"% Image not found: {src}\n"
         
-        result = "\\begin{figure}[h]\n"
+        result = "\\begin{figure}[htbp]\n"
         result += "\\centering\n"
         result += f"\\includegraphics[width=\\textwidth]{{images/{img_filename}}}\n"
         if alt:
@@ -392,7 +392,7 @@ class EPUBToLaTeXConverter:
         img = tag.find('img')
         figcaption = tag.find('figcaption')
         
-        result = "\\begin{figure}[h]\n\\centering\n"
+        result = "\\begin{figure}[htbp]\n\\centering\n"
         
         if img:
             src = img.get('src', '')
@@ -484,6 +484,10 @@ class EPUBToLaTeXConverter:
         tag_name = element.name.lower()
         
         # Handle different tag types
+        # Skip style and link tags completely (CSS should not appear in output)
+        if tag_name in ['style', 'link']:
+            return ""
+        
         if tag_name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
             # Add page break before chapters and major sections
             prefix = ""
