@@ -158,8 +158,8 @@ class EPUBToLaTeXConverter:
         
         level = tag.name.lower()
         latex_cmd = level_map.get(level, 'section')
-        # Process only the children, not the tag itself to avoid recursion
-        content = ''.join(self._convert_element(child, inline=True) for child in tag.children)
+        # Process only the children with special heading mode to avoid line breaks
+        content = ''.join(self._convert_element(child, inline=True, in_heading=True) for child in tag.children)
         
         return f"\\{latex_cmd}{{{content}}}\n\n"
     
@@ -437,27 +437,29 @@ class EPUBToLaTeXConverter:
         content = tag.get_text()
         return f"\\begin{{verbatim}}\n{content}\\end{{verbatim}}\n\n"
     
-    def _convert_div_span(self, tag: Tag, inline: bool = False) -> str:
+    def _convert_div_span(self, tag: Tag, inline: bool = False, in_heading: bool = False) -> str:
         """
         Convert HTML div/span containers.
         
         Args:
             tag: BeautifulSoup tag object
             inline: Whether to process as inline content
+            in_heading: Whether we're inside a heading
             
         Returns:
             Converted LaTeX content
         """
         # Process children only
-        return ''.join(self._convert_element(child, inline=inline) for child in tag.children)
+        return ''.join(self._convert_element(child, inline=inline, in_heading=in_heading) for child in tag.children)
     
-    def _convert_element(self, element, inline: bool = False) -> str:
+    def _convert_element(self, element, inline: bool = False, in_heading: bool = False) -> str:
         """
         Recursively convert HTML element to LaTeX.
         
         Args:
             element: BeautifulSoup element (Tag or NavigableString)
             inline: Whether to process as inline content
+            in_heading: Whether we're inside a heading (section title) - if True, avoid line breaks
             
         Returns:
             Converted LaTeX string
@@ -517,6 +519,9 @@ class EPUBToLaTeXConverter:
             return self._convert_pre_code(element)
         
         elif tag_name == 'br':
+            # In headings, convert <br> to space instead of line break to avoid LaTeX errors
+            if in_heading:
+                return " "
             return "\\\\\n" if inline else "\n"
         
         elif tag_name == 'hr':
@@ -527,18 +532,18 @@ class EPUBToLaTeXConverter:
         
         # Semantic HTML5 tags - process as containers with optional formatting
         elif tag_name in ['div', 'span', 'section', 'article', 'main']:
-            return self._convert_div_span(element, inline=inline)
+            return self._convert_div_span(element, inline=inline, in_heading=in_heading)
         
         elif tag_name in ['header', 'footer']:
             # Add some vertical space for headers/footers
-            content = self._convert_div_span(element, inline=inline)
+            content = self._convert_div_span(element, inline=inline, in_heading=in_heading)
             if content.strip():
                 return f"\\vspace{{0.3cm}}\n{content}\\vspace{{0.3cm}}\n"
             return content
         
         elif tag_name == 'aside':
             # Render asides in a shaded box
-            content = ''.join(self._convert_element(child, inline=False) for child in element.children)
+            content = ''.join(self._convert_element(child, inline=False, in_heading=False) for child in element.children)
             if content.strip():
                 return f"\\begin{{quotation}}\n{content}\\end{{quotation}}\n\n"
             return ""
@@ -549,12 +554,12 @@ class EPUBToLaTeXConverter:
         
         # Caption tag (for tables)
         elif tag_name == 'caption':
-            content = ''.join(self._convert_element(child, inline=True) for child in element.children)
+            content = ''.join(self._convert_element(child, inline=True, in_heading=False) for child in element.children)
             return f"\\caption{{{content}}}\n"
         
         # Meter, progress, output - just extract text content
         elif tag_name in ['meter', 'progress', 'output']:
-            return ''.join(self._convert_element(child, inline=True) for child in element.children)
+            return ''.join(self._convert_element(child, inline=True, in_heading=in_heading) for child in element.children)
         
         # Audio, video, canvas - add placeholder text
         elif tag_name in ['audio', 'video', 'canvas']:
@@ -566,7 +571,7 @@ class EPUBToLaTeXConverter:
         # Handle inline formatting
         elif tag_name in self.format_mapping:
             start, end = self.format_mapping[tag_name]
-            content = ''.join(self._convert_element(child, inline=True) 
+            content = ''.join(self._convert_element(child, inline=True, in_heading=in_heading) 
                             for child in element.children)
             return f"{start}{content}{end}"
         
@@ -574,7 +579,7 @@ class EPUBToLaTeXConverter:
         else:
             result = ""
             for child in element.children:
-                result += self._convert_element(child, inline=inline)
+                result += self._convert_element(child, inline=inline, in_heading=in_heading)
             return result
     
     def _convert_html_to_latex(self, html_content: str) -> str:
