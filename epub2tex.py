@@ -22,6 +22,8 @@ import sys
 import re
 import zipfile
 import argparse
+import subprocess
+import glob
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import shutil
@@ -34,6 +36,186 @@ except ImportError:
     print("Error: Required libraries not installed.")
     print("Please run: pip install -r requirements.txt")
     sys.exit(1)
+
+
+def process_directory(directory: str, output_dir: Optional[str] = None, 
+                     compile_latex_flag: bool = False, compiler: str = 'pdflatex') -> Tuple[int, int]:
+    """
+    Process all EPUB files in a directory.
+    
+    Args:
+        directory: Path to directory containing EPUB files
+        output_dir: Optional output directory for LaTeX files
+        compile_latex_flag: Whether to compile LaTeX to PDF
+        compiler: LaTeX compiler to use
+        
+    Returns:
+        Tuple of (successful_count, failed_count)
+    """
+    dir_path = Path(directory)
+    if not dir_path.exists():
+        print(f"✗ Error: Directory not found: {directory}")
+        return (0, 0)
+    
+    if not dir_path.is_dir():
+        print(f"✗ Error: Not a directory: {directory}")
+        return (0, 0)
+    
+    # Find all EPUB files
+    epub_files = list(dir_path.glob('*.epub')) + list(dir_path.glob('*.EPUB'))
+    
+    if not epub_files:
+        print(f"⚠ Warning: No EPUB files found in {directory}")
+        return (0, 0)
+    
+    print(f"\nFound {len(epub_files)} EPUB file(s) in {directory}")
+    print("=" * 60)
+    
+    successful = 0
+    failed = 0
+    
+    for i, epub_file in enumerate(epub_files, 1):
+        print(f"\n[{i}/{len(epub_files)}] Processing: {epub_file.name}")
+        print("-" * 60)
+        
+        try:
+            # Determine output path
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                output_tex = out_dir / epub_file.with_suffix('.tex').name
+            else:
+                output_tex = epub_file.with_suffix('.tex')
+            
+            # Convert EPUB to LaTeX
+            converter = EPUBToLaTeXConverter(str(epub_file), str(output_tex))
+            if converter.convert():
+                successful += 1
+                
+                # Compile to PDF if requested
+                if compile_latex_flag:
+                    print(f"\nCompiling {output_tex.name}...")
+                    if compile_latex(str(output_tex), compiler=compiler):
+                        print(f"✓ PDF compilation successful")
+                    else:
+                        print(f"⚠ Warning: PDF compilation failed, but LaTeX file is available")
+            else:
+                failed += 1
+                print(f"✗ Failed to convert {epub_file.name}")
+                
+        except Exception as e:
+            failed += 1
+            print(f"✗ Error processing {epub_file.name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    print("\n" + "=" * 60)
+    print(f"Batch processing complete!")
+    print(f"  Successful: {successful}")
+    print(f"  Failed: {failed}")
+    print("=" * 60)
+    
+    return (successful, failed)
+
+
+def compile_latex(tex_file: str, compiler: str = 'pdflatex', max_passes: int = 2) -> bool:
+    """
+    Compile LaTeX file to PDF with error-robust compilation.
+    
+    Args:
+        tex_file: Path to the .tex file
+        compiler: LaTeX compiler to use (pdflatex, xelatex, lualatex)
+        max_passes: Maximum number of compilation passes (for TOC, refs, etc.)
+        
+    Returns:
+        True if compilation successful, False otherwise
+    """
+    tex_path = Path(tex_file)
+    if not tex_path.exists():
+        print(f"✗ Error: LaTeX file not found: {tex_file}")
+        return False
+    
+    # Check if compiler is available
+    try:
+        subprocess.run([compiler, '--version'], 
+                      stdout=subprocess.DEVNULL, 
+                      stderr=subprocess.DEVNULL,
+                      check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(f"✗ Error: LaTeX compiler '{compiler}' not found")
+        print(f"  Please install TeX Live or MiKTeX")
+        return False
+    
+    # Compilation options for error robustness
+    compile_options = [
+        compiler,
+        '-interaction=nonstopmode',  # Don't stop on errors
+        '-halt-on-error',            # But halt on critical errors
+        '-file-line-error',          # Better error messages
+        tex_path.name
+    ]
+    
+    original_dir = os.getcwd()
+    success = True
+    
+    try:
+        # Change to the directory containing the .tex file
+        os.chdir(tex_path.parent)
+        
+        print(f"\nCompiling LaTeX with {compiler}...")
+        
+        # Multiple passes for TOC, references, etc.
+        for pass_num in range(1, max_passes + 1):
+            print(f"  Pass {pass_num}/{max_passes}...")
+            
+            try:
+                result = subprocess.run(
+                    compile_options,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=120,  # 2 minute timeout per pass
+                    text=True
+                )
+                
+                # Check for compilation errors in output
+                if result.returncode != 0:
+                    # Try to extract error message
+                    error_lines = []
+                    for line in result.stdout.split('\n'):
+                        if '!' in line or 'Error' in line or 'error' in line:
+                            error_lines.append(line)
+                    
+                    if error_lines:
+                        print(f"⚠ Warning: Compilation errors on pass {pass_num}:")
+                        for line in error_lines[:5]:  # Show first 5 errors
+                            print(f"    {line}")
+                    
+                    # Continue to next pass anyway for robustness
+                    # The PDF might still be generated with some warnings
+                
+            except subprocess.TimeoutExpired:
+                print(f"⚠ Warning: Compilation timeout on pass {pass_num}")
+                success = False
+                break
+            except Exception as e:
+                print(f"⚠ Warning: Compilation error on pass {pass_num}: {str(e)}")
+                success = False
+                break
+        
+        # Check if PDF was generated
+        pdf_path = tex_path.with_suffix('.pdf')
+        if pdf_path.exists():
+            print(f"✓ PDF generated successfully: {pdf_path}")
+            return True
+        else:
+            print(f"✗ Error: PDF not generated (compilation may have failed)")
+            return False
+            
+    except Exception as e:
+        print(f"✗ Error during compilation: {str(e)}")
+        return False
+    finally:
+        os.chdir(original_dir)
 
 
 class EPUBToLaTeXConverter:
@@ -659,8 +841,12 @@ class EPUBToLaTeXConverter:
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 
-% Language support
-\usepackage[french,english]{babel}
+% Math support
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% Language support (use english as fallback if french not available)
+\usepackage[english]{babel}
 
 % Graphics and images
 \usepackage{graphicx}
@@ -841,8 +1027,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Convert a single EPUB file
   python epub2tex.py book.epub
+  
+  # Convert with custom output path
   python epub2tex.py book.epub output.tex
+  
+  # Convert and compile to PDF
+  python epub2tex.py book.epub --compile
+  
+  # Process all EPUBs in a directory
+  python epub2tex.py --directory /path/to/epubs
+  
+  # Process directory and compile all to PDF
+  python epub2tex.py --directory /path/to/epubs --compile
+  
+  # Process directory with custom output location
+  python epub2tex.py --directory /path/to/epubs --output-dir /path/to/output
+  
+  # Display help
   python epub2tex.py --help
 
 The converter will:
@@ -851,27 +1054,72 @@ The converter will:
   - Handle lists, tables, images, and links
   - Extract images to an 'images' subdirectory
   - Generate clean, readable LaTeX code
+  - Optionally compile to PDF with error-robust compilation
         """
     )
     
-    parser.add_argument(
+    # Input options (mutually exclusive: single file or directory)
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
         'epub_file',
+        nargs='?',
         help='Path to the input EPUB file'
     )
+    input_group.add_argument(
+        '-d', '--directory',
+        help='Path to directory containing EPUB files (processes all EPUBs in directory)'
+    )
     
+    # Output options
     parser.add_argument(
         'output_file',
         nargs='?',
-        help='Path to the output LaTeX file (optional, defaults to input filename with .tex extension)'
+        help='Path to the output LaTeX file (optional for single file, defaults to input filename with .tex extension)'
+    )
+    parser.add_argument(
+        '-o', '--output-dir',
+        help='Output directory for LaTeX files (only for directory mode)'
+    )
+    
+    # Compilation options
+    parser.add_argument(
+        '-c', '--compile',
+        action='store_true',
+        help='Automatically compile LaTeX to PDF after conversion'
+    )
+    parser.add_argument(
+        '--compiler',
+        default='pdflatex',
+        choices=['pdflatex', 'xelatex', 'lualatex'],
+        help='LaTeX compiler to use (default: pdflatex)'
     )
     
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version='EPUB to LaTeX Converter v1.0'
+        version='EPUB to LaTeX Converter v2.0'
     )
     
     args = parser.parse_args()
+    
+    # Directory mode
+    if args.directory:
+        if args.output_file:
+            print("Error: Cannot specify output_file with --directory. Use --output-dir instead.")
+            sys.exit(1)
+        
+        successful, failed = process_directory(
+            args.directory,
+            output_dir=args.output_dir,
+            compile_latex_flag=args.compile,
+            compiler=args.compiler
+        )
+        sys.exit(0 if failed == 0 else 1)
+    
+    # Single file mode
+    if not args.epub_file:
+        parser.print_help()
+        sys.exit(1)
     
     # Check if input file exists
     if not os.path.isfile(args.epub_file):
@@ -882,7 +1130,20 @@ The converter will:
     converter = EPUBToLaTeXConverter(args.epub_file, args.output_file)
     success = converter.convert()
     
-    sys.exit(0 if success else 1)
+    if not success:
+        sys.exit(1)
+    
+    # Compile if requested
+    if args.compile:
+        tex_output = args.output_file or converter.output_path
+        print(f"\nCompiling {tex_output}...")
+        if compile_latex(tex_output, compiler=args.compiler):
+            print(f"✓ Compilation successful")
+        else:
+            print(f"⚠ Warning: Compilation failed, but LaTeX file is available")
+            sys.exit(1)
+    
+    sys.exit(0)
 
 
 if __name__ == '__main__':

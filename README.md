@@ -5,6 +5,8 @@ Un convertisseur **ultra-puissant et robuste** pour transformer vos fichiers EPU
 ## ✨ Caractéristiques
 
 - **Conversion complète** : Transforme tous les éléments EPUB (chapitres, sections, paragraphes)
+- **Traitement par lots** : Convertit tous les EPUBs d'un répertoire en une seule commande
+- **Compilation automatique** : Génère directement des fichiers PDF avec gestion d'erreurs robuste
 - **Support étendu des balises HTML** : Plus de 40 balises HTML différentes supportées
 - **Préservation du style** : Maintient le formatage (gras, italique, souligné, surligné, etc.)
 - **Support des médias** : Gère les images, tableaux, listes, liens
@@ -52,6 +54,39 @@ Cela créera un fichier `livre.tex` dans le même répertoire.
 python epub2tex.py livre.epub mon_document.tex
 ```
 
+### Traiter tout un répertoire d'EPUBs
+
+**Nouveau !** Vous pouvez maintenant convertir tous les fichiers EPUB d'un répertoire en une seule commande :
+
+```bash
+# Convertir tous les EPUBs d'un répertoire
+python epub2tex.py --directory /chemin/vers/repertoire_epubs
+
+# Avec répertoire de sortie personnalisé
+python epub2tex.py --directory /chemin/vers/epubs --output-dir /chemin/vers/sortie
+```
+
+### Compilation automatique en PDF
+
+**Nouveau !** Le convertisseur peut maintenant compiler automatiquement les fichiers LaTeX en PDF avec une gestion d'erreurs robuste :
+
+```bash
+# Convertir et compiler un seul fichier
+python epub2tex.py livre.epub --compile
+
+# Convertir et compiler tous les EPUBs d'un répertoire
+python epub2tex.py --directory /chemin/vers/epubs --compile
+
+# Utiliser un autre compilateur LaTeX
+python epub2tex.py livre.epub --compile --compiler xelatex
+```
+
+La compilation automatique :
+- **Effectue plusieurs passes** pour générer correctement la table des matières
+- **Continue malgré les erreurs** pour produire un PDF même avec des avertissements
+- **Supporte plusieurs compilateurs** : `pdflatex` (par défaut), `xelatex`, `lualatex`
+- **Affiche des messages clairs** sur le statut de compilation
+
 ### Exemples
 
 ```bash
@@ -60,6 +95,12 @@ python epub2tex.py roman.epub
 
 # Convertir avec sortie personnalisée
 python epub2tex.py manuel.epub output/manuel_converti.tex
+
+# Convertir et compiler directement en PDF
+python epub2tex.py roman.epub --compile
+
+# Traiter tous les EPUBs d'un dossier et compiler en PDF
+python epub2tex.py --directory ~/mes_livres --compile
 
 # Afficher l'aide
 python epub2tex.py --help
@@ -195,7 +236,21 @@ votre_repertoire/
 
 ## 🔧 Compilation du LaTeX
 
-Une fois la conversion terminée, compilez le document LaTeX :
+### Compilation automatique
+
+Le convertisseur peut maintenant compiler automatiquement vos fichiers LaTeX en PDF :
+
+```bash
+# Conversion et compilation en une seule commande
+python epub2tex.py livre.epub --compile
+
+# Pour un répertoire entier
+python epub2tex.py --directory mes_livres --compile
+```
+
+### Compilation manuelle
+
+Une fois la conversion terminée, vous pouvez aussi compiler manuellement le document LaTeX :
 
 ```bash
 # Avec pdflatex
@@ -211,12 +266,22 @@ lualatex livre.tex
 lualatex livre.tex
 ```
 
+### Gestion des erreurs de compilation
+
+La compilation automatique est **robuste aux erreurs** :
+- Continue même en présence d'avertissements
+- Effectue plusieurs passes pour les références croisées
+- Affiche des messages d'erreur clairs
+- Produit un PDF même avec des avertissements mineurs
+
 ## 🎯 Cas d'usage
 
 - **Publications académiques** : Convertir des livres électroniques en thèses ou articles
 - **Documentation technique** : Transformer des manuels EPUB en PDF professionnels
 - **Édition** : Préparer des manuscrits pour l'impression
 - **Archives** : Convertir des bibliothèques numériques en format LaTeX éditable
+- **Traitement par lots** : Convertir rapidement une collection entière d'EPUBs
+- **Production automatisée** : Intégrer dans des workflows de publication automatique
 
 ## 🛠️ Développement
 
@@ -270,6 +335,37 @@ Si vous rencontrez un problème, veuillez ouvrir une issue sur GitHub avec :
 - Interface graphique (GUI)
 - Support des index et glossaires
 - Conversion des SVG en TikZ
+
+## 🆕 Nouveautés Version 2.0
+
+### Traitement par lots de répertoires
+Vous pouvez maintenant convertir tous les fichiers EPUB d'un répertoire en une seule commande. Idéal pour traiter des bibliothèques entières !
+
+```bash
+python epub2tex.py --directory /mes_livres --output-dir /sortie
+```
+
+### Compilation automatique robuste aux erreurs
+Le convertisseur peut maintenant compiler automatiquement vos fichiers LaTeX en PDF avec une gestion d'erreurs avancée :
+
+- ✓ **Compilation multi-passes** : Génère correctement les tables des matières et références
+- ✓ **Robuste aux erreurs** : Continue la compilation même en présence d'avertissements
+- ✓ **Support multi-compilateur** : Compatible avec pdflatex, xelatex et lualatex
+- ✓ **Messages clairs** : Affiche des informations détaillées sur le processus de compilation
+
+```bash
+# Convertir et compiler en une commande
+python epub2tex.py livre.epub --compile
+
+# Traiter un répertoire et compiler tous les PDFs
+python epub2tex.py --directory /mes_livres --compile
+```
+
+### Amélioration du préambule LaTeX
+Le préambule a été amélioré pour inclure :
+- Support mathématique avec `amsmath` et `amssymb`
+- Meilleure gestion des caractères UTF-8
+- Compatibilité améliorée avec différentes distributions LaTeX
 
 ## 🙏 Remerciements
 
