@@ -9,6 +9,7 @@ Un convertisseur **ultra-puissant et robuste** pour transformer vos fichiers EPU
 - **Compilation automatique** : Génère directement des fichiers PDF avec gestion d'erreurs robuste
 - **Support étendu des balises HTML** : Plus de 40 balises HTML différentes supportées
 - **Préservation du style** : Maintient le formatage (gras, italique, souligné, surligné, etc.)
+- **Support des classes CSS** : **NOUVEAU !** Convertit les attributs `class=` HTML en formatage LaTeX approprié
 - **Support des médias** : Gère les images, tableaux, listes, liens
 - **Listes imbriquées** : Support complet des listes à plusieurs niveaux
 - **Listes de définitions** : Conversion des listes de définitions HTML
@@ -164,6 +165,71 @@ python epub2tex.py --help
 
 **Note importante :** Les balises `<br>` dans les titres (`<h1>` à `<h6>`) sont automatiquement converties en espaces au lieu de sauts de ligne pour éviter les erreurs de compilation LaTeX avec le package `titlesec`.
 
+### Support des classes CSS
+
+**NOUVEAU !** Le convertisseur est maintenant sensible aux attributs `class=` HTML et applique automatiquement le formatage LaTeX approprié.
+
+#### Classes inline supportées
+
+| Classe CSS | Formatage LaTeX | Description |
+|------------|------------------|-------------|
+| `important` | `\textbf{\large }` | Texte important en gras et agrandi |
+| `highlight` | `\hl{}` (jaune) | Surlignage en jaune |
+| `warning` | `\textbf{\textcolor{red}{}}` | Avertissement en rouge gras |
+| `note` | `\emph{\textcolor{blue}{}}` | Note en bleu italique |
+| `info` | `\textcolor{teal}{}` | Information en couleur turquoise |
+| `code`, `code-inline` | `\texttt{}` | Code en police monospace |
+| `author-note` | `{\small\itshape }` | Note d'auteur (petit, italique) |
+| `epigraph` | `{\itshape }` | Épigraphe en italique |
+| `done` | `\textcolor{green}{}` | Élément terminé (vert) |
+| `pending` | `\textcolor{orange}{}` | Élément en cours (orange) |
+| `todo` | `\textcolor{gray}{}` | Élément à faire (gris) |
+
+#### Classes de bloc supportées
+
+| Classe CSS | Environnement LaTeX | Description |
+|------------|---------------------|-------------|
+| `highlight` | `shadedquotation` | Bloc avec fond gris clair |
+| `box` | `mdframed` | Boîte encadrée |
+| `info` | `mdframed[frametitle=Information]` | Boîte d'information |
+| `warning` | `mdframed[...linecolor=red]` | Boîte d'avertissement rouge |
+| `note` | `mdframed[...linecolor=blue]` | Boîte de note bleue |
+| `important` | `mdframed[...linecolor=orange]` | Boîte importante orange |
+
+#### Classes spéciales pour tableaux
+
+| Classe CSS | Effet LaTeX | Description |
+|------------|-------------|-------------|
+| `highlight-row` | `\rowcolor{highlightyellow}` | Ligne de tableau surlignée |
+
+#### Exemples d'utilisation
+
+```html
+<!-- Dans votre fichier EPUB -->
+<p class="important">Ce texte sera en gras et agrandi.</p>
+
+<p class="note">Cette remarque sera en bleu italique.</p>
+
+<div class="box info">
+  <h3>Information</h3>
+  <p>Contenu dans une boîte encadrée avec titre "Information".</p>
+</div>
+
+<ul class="checklist">
+  <li class="done">Tâche terminée (en vert)</li>
+  <li class="pending">Tâche en cours (en orange)</li>
+  <li class="todo">Tâche à faire (en gris)</li>
+</ul>
+
+<table>
+  <tr class="highlight-row">
+    <td>Ligne surlignée en jaune</td>
+  </tr>
+</table>
+```
+
+Le convertisseur reconnaît automatiquement ces classes et applique le formatage LaTeX correspondant, vous permettant ainsi de créer des documents riches et bien formatés directement depuis votre EPUB.
+
 ### Structure du document LaTeX généré
 
 Le fichier LaTeX généré inclut :
@@ -200,12 +266,14 @@ Le convertisseur génère un document LaTeX avec les packages suivants :
 - `xcolor` : Support des couleurs
 - `soul` : Surlignage de texte
 - `ulem` : Texte barré et souligné
+- `mdframed` : Boîtes encadrées pour contenu spécial (NEW)
 
 **Tableaux :**
 - `booktabs` : Tableaux professionnels
 - `tabularx` : Tableaux adaptatifs
 - `longtable` : Tableaux multi-pages
 - `array` : Amélioration des tableaux
+- `colortbl` : Coloration des lignes de tableau (NEW)
 
 **Listes :**
 - `enumitem` : Personnalisation des listes
@@ -335,6 +403,27 @@ Si vous rencontrez un problème, veuillez ouvrir une issue sur GitHub avec :
 - Interface graphique (GUI)
 - Support des index et glossaires
 - Conversion des SVG en TikZ
+
+## 🆕 Nouveautés Version 2.3
+
+### Support des classes CSS (NEW!)
+Le convertisseur est maintenant **sensible aux attributs `class=`** dans les fichiers HTML/EPUB ! 
+
+- ✓ **Classes inline** : `important`, `warning`, `note`, `highlight`, `code-inline`, etc.
+- ✓ **Classes de bloc** : `box`, `info`, `warning`, `note`, `important` avec boîtes encadrées
+- ✓ **Classes pour listes** : `done`, `pending`, `todo` avec coloration des éléments
+- ✓ **Classes pour tableaux** : `highlight-row` pour surligner des lignes
+- ✓ **Formatage automatique** : Les classes sont automatiquement converties en commandes LaTeX appropriées
+- ✓ **Extensible** : Les mappages de classes peuvent être personnalisés dans le code
+
+```html
+<!-- Exemple dans votre EPUB -->
+<p class="important">Texte important en gras et agrandi</p>
+<div class="box info">Contenu dans une boîte d'information</div>
+<li class="done">Tâche terminée (affichée en vert)</li>
+```
+
+Voir la section "Support des classes CSS" pour la liste complète des classes supportées.
 
 ## 🆕 Nouveautés Version 2.0
 

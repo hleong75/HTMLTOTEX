@@ -51,6 +51,7 @@ htmlcov/
 # Sample and test files
 sample.epub
 sample_output.tex
+class_test_*.tex
 images/
 
 # Temporary files
