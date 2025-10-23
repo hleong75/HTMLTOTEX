@@ -280,11 +280,92 @@ class EPUBToLaTeXConverter:
             'time': ('', ''),
             'data': ('', ''),
         }
+        
+        # CSS class to LaTeX formatting mapping
+        # Maps class names to (prefix, suffix) tuples for wrapping content
+        self.class_mapping = {
+            # Emphasis and highlighting
+            'important': ('\\textbf{\\large ', '}'),
+            'highlight': ('\\sethlcolor{highlightyellow}\\hl{', '}'),
+            'highlight-row': ('\\rowcolor{highlightyellow}', ''),  # Special case for table rows
+            'warning': ('\\textbf{\\textcolor{red}{', '}}'),
+            'note': ('\\emph{\\textcolor{blue}{', '}}'),
+            'info': ('\\textcolor{teal}{', '}'),
+            
+            # Code and technical
+            'code': ('\\texttt{', '}'),
+            'code-inline': ('\\texttt{', '}'),
+            
+            # Special text styles
+            'author-note': ('{\\small\\itshape ', '}'),
+            'epigraph': ('{\\itshape ', '}'),
+            
+            # List item states (can be used with list items)
+            'done': ('\\textcolor{green}{', '}'),
+            'pending': ('\\textcolor{orange}{', '}'),
+            'todo': ('\\textcolor{gray}{', '}'),
+        }
+        
+        # Block-level class mappings (for div, section, blockquote, etc.)
+        # Maps class names to LaTeX environment or formatting
+        self.block_class_mapping = {
+            'highlight': ('shadedquotation', None),  # Custom environment
+            'box': ('mdframed', None),
+            'info': ('mdframed', '[frametitle=Information]'),
+            'warning': ('mdframed', '[frametitle=Attention,linecolor=red]'),
+            'note': ('mdframed', '[frametitle=Note,linecolor=blue]'),
+            'important': ('mdframed', '[frametitle=Important,linecolor=orange,linewidth=2pt]'),
+        }
     
     def _default_output_path(self) -> str:
         """Generate default output path based on input filename."""
         base = os.path.splitext(self.epub_path)[0]
         return f"{base}.tex"
+    
+    def _get_element_classes(self, element: Tag) -> List[str]:
+        """
+        Extract CSS classes from an element.
+        
+        Args:
+            element: BeautifulSoup tag object
+            
+        Returns:
+            List of class names
+        """
+        if not isinstance(element, Tag):
+            return []
+        
+        classes = element.get('class', [])
+        if isinstance(classes, str):
+            classes = classes.split()
+        return classes
+    
+    def _apply_class_formatting(self, content: str, classes: List[str], inline: bool = True) -> str:
+        """
+        Apply LaTeX formatting based on CSS classes.
+        
+        Args:
+            content: The content to format
+            classes: List of CSS class names
+            inline: Whether this is inline or block-level content
+            
+        Returns:
+            Formatted content with class-based LaTeX commands
+        """
+        if not classes:
+            return content
+        
+        mapping = self.class_mapping if inline else self.block_class_mapping
+        
+        # Apply formatting for each recognized class
+        for class_name in classes:
+            if class_name in mapping:
+                if inline:
+                    prefix, suffix = mapping[class_name]
+                    content = f"{prefix}{content}{suffix}"
+                # Block-level formatting is handled differently
+        
+        return content
     
     def _escape_latex(self, text: str) -> str:
         """
@@ -321,7 +402,7 @@ class EPUBToLaTeXConverter:
     
     def _convert_heading(self, tag: Tag) -> str:
         """
-        Convert HTML heading tags to LaTeX sections.
+        Convert HTML heading tags to LaTeX sections with class support.
         
         Args:
             tag: BeautifulSoup tag object
@@ -342,6 +423,12 @@ class EPUBToLaTeXConverter:
         latex_cmd = level_map.get(level, 'section')
         # Process only the children with special heading mode to avoid line breaks
         content = ''.join(self._convert_element(child, inline=True, in_heading=True) for child in tag.children)
+        
+        # Apply class-based formatting if present (inline formatting for heading content)
+        classes = self._get_element_classes(tag)
+        if classes:
+            # For headings, we only apply inline formatting to the content
+            content = self._apply_class_formatting(content, classes, inline=True)
         
         # \paragraph and \subparagraph are run-in headings that should not have blank lines after them
         # to avoid "Paragraph ended before \ttl@straight@i was complete" error with titlesec
@@ -364,12 +451,17 @@ class EPUBToLaTeXConverter:
         content = ''.join(self._convert_element(child, inline=True) for child in tag.children)
         if not content.strip():
             return ""
+        
+        # Apply class-based formatting if present
+        classes = self._get_element_classes(tag)
+        content = self._apply_class_formatting(content, classes, inline=True)
+        
         return f"{content}\n\n"
     
     def _convert_list(self, tag: Tag) -> str:
         """
         Convert HTML list (ul/ol) to LaTeX itemize/enumerate.
-        Supports nested lists.
+        Supports nested lists and class-based formatting.
         
         Args:
             tag: BeautifulSoup tag object
@@ -393,7 +485,11 @@ class EPUBToLaTeXConverter:
                 else:
                     item_content += self._convert_element(child, inline=True)
             
-            result += f"    \\item {item_content.strip()}\n"
+            # Apply class-based formatting to list item
+            classes = self._get_element_classes(item)
+            item_content = self._apply_class_formatting(item_content.strip(), classes, inline=True)
+            
+            result += f"    \\item {item_content}\n"
             
             # Add nested lists
             for nested in nested_lists:
@@ -408,7 +504,7 @@ class EPUBToLaTeXConverter:
     
     def _convert_table(self, tag: Tag) -> str:
         """
-        Convert HTML table to LaTeX tabular.
+        Convert HTML table to LaTeX tabular with class support.
         
         Args:
             tag: BeautifulSoup tag object
@@ -446,6 +542,14 @@ class EPUBToLaTeXConverter:
         result += "\\hline\n"
         
         for i, row in enumerate(rows):
+            # Check for row classes
+            row_classes = self._get_element_classes(row)
+            
+            # Handle special row highlighting (e.g., highlight-row class)
+            row_prefix = ""
+            if row_classes and 'highlight-row' in row_classes:
+                row_prefix = "\\rowcolor{highlightyellow} "
+            
             cells = row.find_all(['td', 'th'])
             cell_contents = []
             for cell in cells:
@@ -453,7 +557,10 @@ class EPUBToLaTeXConverter:
                 content = ''.join(self._convert_element(child, inline=True) for child in cell.children).strip()
                 cell_contents.append(content)
             
-            result += " & ".join(cell_contents) + " \\\\\n"
+            # Build row content
+            row_content = " & ".join(cell_contents)
+            
+            result += row_prefix + row_content + " \\\\\n"
             result += "\\hline\n"
         
         result += "\\end{tabular}\n\\end{table}\n\n"
@@ -521,7 +628,7 @@ class EPUBToLaTeXConverter:
     
     def _convert_blockquote(self, tag: Tag) -> str:
         """
-        Convert HTML blockquote to LaTeX quote environment.
+        Convert HTML blockquote to LaTeX quote environment with class support.
         
         Args:
             tag: BeautifulSoup tag object
@@ -531,6 +638,25 @@ class EPUBToLaTeXConverter:
         """
         # Process children of blockquote
         content = ''.join(self._convert_element(child, inline=False) for child in tag.children)
+        
+        # Check for classes
+        classes = self._get_element_classes(tag)
+        
+        # If it has special block classes, apply them
+        for class_name in classes:
+            if class_name in self.block_class_mapping:
+                env_name, env_options = self.block_class_mapping[class_name]
+                options_str = env_options if env_options else ''
+                return f"\\begin{{{env_name}}}{options_str}\n{content}\\end{{{env_name}}}\n\n"
+        
+        # Check for inline classes like 'epigraph'
+        if classes and 'epigraph' in classes:
+            # Apply italic formatting for epigraph
+            content_lines = content.strip().split('\n')
+            formatted_content = '\n'.join(f"{{\\itshape {line}}}" if line.strip() else line 
+                                         for line in content_lines)
+            return f"\\begin{{quote}}\n{formatted_content}\n\\end{{quote}}\n\n"
+        
         return f"\\begin{{quote}}\n{content}\\end{{quote}}\n\n"
     
     def _convert_definition_list(self, tag: Tag) -> str:
@@ -626,7 +752,7 @@ class EPUBToLaTeXConverter:
     
     def _convert_div_span(self, tag: Tag, inline: bool = False, in_heading: bool = False) -> str:
         """
-        Convert HTML div/span containers.
+        Convert HTML div/span containers with class-aware formatting.
         
         Args:
             tag: BeautifulSoup tag object
@@ -636,8 +762,28 @@ class EPUBToLaTeXConverter:
         Returns:
             Converted LaTeX content
         """
-        # Process children only
-        return ''.join(self._convert_element(child, inline=inline, in_heading=in_heading) for child in tag.children)
+        # Get classes
+        classes = self._get_element_classes(tag)
+        
+        # Process children
+        content = ''.join(self._convert_element(child, inline=inline, in_heading=in_heading) for child in tag.children)
+        
+        if not content.strip():
+            return content
+        
+        # Apply class-based formatting
+        if classes and not inline:
+            # Check for block-level class mappings
+            for class_name in classes:
+                if class_name in self.block_class_mapping:
+                    env_name, env_options = self.block_class_mapping[class_name]
+                    options_str = env_options if env_options else ''
+                    return f"\\begin{{{env_name}}}{options_str}\n{content}\\end{{{env_name}}}\n\n"
+        elif classes and inline:
+            # Apply inline formatting
+            content = self._apply_class_formatting(content, classes, inline=True)
+        
+        return content
     
     def _convert_element(self, element, inline: bool = False, in_heading: bool = False) -> str:
         """
@@ -860,6 +1006,20 @@ class EPUBToLaTeXConverter:
 \usepackage{soul}
 \definecolor{highlightyellow}{RGB}{255,255,200}
 
+% Define additional colors for class-based formatting
+\definecolor{lightblue}{RGB}{173,216,230}
+\definecolor{lightorange}{RGB}{255,218,185}
+\definecolor{lightgray}{RGB}{211,211,211}
+\definecolor{lightgreen}{RGB}{144,238,144}
+
+% Framed boxes for special content
+\usepackage{mdframed}
+
+% Define custom environments for class-based blocks
+\newenvironment{shadedquotation}
+{\begin{mdframed}[backgroundcolor=lightgray!20]}
+{\end{mdframed}}
+
 % Hyperlinks
 \usepackage{hyperref}
 \hypersetup{
@@ -876,6 +1036,7 @@ class EPUBToLaTeXConverter:
 \usepackage{tabularx}
 \usepackage{longtable}
 \usepackage{array}
+\usepackage{colortbl}  % For row coloring in tables
 
 % Lists
 \usepackage{enumitem}
